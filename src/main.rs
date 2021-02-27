@@ -293,5 +293,5 @@ mod tests {
 
 
 fn main() {
-    println!("{}", 3.0f64.powi(-1));
+
 }
