@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::f64;
 use crate::BinaryOp::{Minus, Multiply, Plus, Divide};
-use crate::Val::Float;
+use crate::Val::{Float, Int};
 use crate::Expr::BinOp;
 
 #[derive(Clone, Debug, PartialEq, Hash, Eq)]
@@ -29,7 +29,7 @@ impl BinaryOp {
 #[derive(Copy, Clone, Debug, PartialEq)]
 enum UnaryOp {
     Sin,
-    Cos
+    Cos,
 }
 
 impl UnaryOp {
@@ -43,16 +43,14 @@ impl UnaryOp {
 
 #[derive(Copy, Clone, Debug, PartialEq)]
 enum Val {
-    Zero,
-    One,
+    Int(i32),
     Float(f64),
 }
 
 impl Val {
     fn to_float(&self) -> f64 {
         match self {
-            Val::Zero => { 0.0 }
-            Val::One => { 1.0 }
+            Val::Int(x) => { *x as f64 }
             Val::Float(x) => { *x }
         }
     }
@@ -64,6 +62,7 @@ enum Expr {
     Variable(Var),
     BinOp(BinaryOp, Box<Expr>, Box<Expr>),
     UnOp(UnaryOp, Box<Expr>),
+    Pow(Box<Expr>, i32),
 }
 
 impl Expr {
@@ -79,6 +78,7 @@ impl Expr {
     fn new_unop(op: UnaryOp, e: Expr) -> Expr {
         Expr::UnOp(op, Box::new(e))
     }
+    fn new_pow(e: Expr, n: i32) -> Expr { Expr::Pow(Box::new(e), n) }
 }
 
 fn eval(e: &Expr, env: &HashMap<Var, f64>) -> f64 {
@@ -89,14 +89,15 @@ fn eval(e: &Expr, env: &HashMap<Var, f64>) -> f64 {
             op.get_fn()(eval(x, &env), eval(y, &env))
         }
         Expr::UnOp(op, x) => { op.get_fn()(eval(x, &env)) }
+        Expr::Pow(x, n) => { eval(x, &env).powi(*n) }
     }
 }
 
 fn diff_no_opt(e: Expr, var: &Var) -> Expr {
     match e {
-        Expr::Value(_) => { Expr::Value(Val::Zero) }
-        Expr::Variable(v) if v == *var => { Expr::Value(Val::One) }
-        Expr::Variable(_) => { Expr::Value(Val::Zero) }
+        Expr::Value(_) => { Expr::Value(Val::Int(0)) }
+        Expr::Variable(v) if v == *var => { Expr::Value(Val::Int(1)) }
+        Expr::Variable(_) => { Expr::Value(Val::Int(0)) }
         Expr::BinOp(op, x, y) => {
             match op {
                 BinaryOp::Plus | BinaryOp::Minus => {
@@ -131,17 +132,20 @@ fn diff_no_opt(e: Expr, var: &Var) -> Expr {
             Expr::BinOp(
                 Multiply,
                 Box::new(match op {
-                    UnaryOp::Sin => { Expr::UnOp(UnaryOp::Cos, Box::new(diff_no_opt(*x, var))) }
+                    UnaryOp::Sin => { Expr::UnOp(UnaryOp::Cos, x) }
                     UnaryOp::Cos => {
                         Expr::BinOp(
                             Minus,
-                            Box::new(Expr::Value(Val::Zero)),
-                            Box::new(Expr::UnOp(UnaryOp::Sin, Box::new(diff_no_opt(*x, var)))),
+                            Box::new(Expr::Value(Val::Int(0))),
+                            Box::new(Expr::UnOp(UnaryOp::Sin, x)),
                         )
                     }
                 }),
                 Box::new(dx),
             )
+        }
+        Expr::Pow(x, n) => {
+            Expr::new_binop(Multiply, Expr::Value(Int(n)), diff_no_opt(*x, var))
         }
     }
 }
@@ -154,37 +158,37 @@ fn optimize(e: Expr) -> Expr {
             let x = optimize(*x);
             let y = optimize(*y);
             match (&x, &y) {
-                (Expr::Value(Val::Zero), Expr::Value(Val::Zero)) => {
-                    Expr::Value(Val::Zero)
+                (Expr::Value(Val::Int(0)), Expr::Value(Val::Int(0))) => {
+                    Expr::Value(Val::Int(0))
                 }
-                (Expr::Value(Val::Zero), _) => {
+                (Expr::Value(Val::Int(0)), _) => {
                     match op {
                         Plus => { y }
                         Minus => { Expr::BinOp(Minus, Box::new(x), Box::new(y)) }
-                        Multiply | Divide => { Expr::Value(Val::Zero) }
+                        Multiply | Divide => { Expr::Value(Val::Int(0)) }
                     }
                 }
-                (_, Expr::Value(Val::Zero)) => {
+                (_, Expr::Value(Val::Int(0))) => {
                     match op {
                         Plus | Minus => { x }
-                        Multiply => { Expr::Value(Val::Zero) }
+                        Multiply => { Expr::Value(Val::Int(0)) }
                         Divide => { panic!("Division by zero") }
                     }
                 }
-                (Expr::Value(Val::One), Expr::Value(Val::One)) => {
+                (Expr::Value(Val::Int(1)), Expr::Value(Val::Int(1))) => {
                     match op {
-                        Multiply | Divide => { Expr::Value(Val::One) }
-                        Minus => { Expr::Value(Val::Zero) }
+                        Multiply | Divide => { Expr::Value(Val::Int(1)) }
+                        Minus => { Expr::Value(Val::Int(0)) }
                         Plus => { Expr::Value(Float(2.0)) }
                     }
                 }
-                (_, Expr::Value(Val::One)) => {
+                (_, Expr::Value(Val::Int(1))) => {
                     match op {
                         Multiply | Divide => { x }
                         _ => { Expr::new_binop(op, x, y) }
                     }
                 }
-                (Expr::Value(Val::One), _) => {
+                (Expr::Value(Val::Int(1)), _) => {
                     match op {
                         Multiply => { y }
                         _ => { Expr::new_binop(op, x, y) }
@@ -197,13 +201,26 @@ fn optimize(e: Expr) -> Expr {
         }
         Expr::UnOp(op, x) => {
             let x = optimize(*x);
-            if let Expr::Value(Val::Zero) = x {
+            if let Expr::Value(Val::Int(0)) = x {
                 match op {
-                    UnaryOp::Sin => { Expr::Value(Val::Zero) }
-                    UnaryOp::Cos => { Expr::Value(Val::One) }
+                    UnaryOp::Sin => { Expr::Value(Val::Int(0)) }
+                    UnaryOp::Cos => { Expr::Value(Val::Int(1)) }
                 }
             } else {
                 Expr::UnOp(op, Box::new(x))
+            }
+        }
+        Expr::Pow(x, n) => {
+            if n == 0 {
+                Expr::Value(Val::Int(1))
+            } else if n == 1 {
+                optimize(*x)
+            } else {
+                match optimize(*x) {
+                    x @ Expr::Value(Val::Int(0)) | x @ Expr::Value(Val::Int(1)) => { x }
+                    Expr::Pow(x, m) => { Expr::Pow(x, n * m) }
+                    x => { Expr::Pow(Box::new(x), n) }
+                }
             }
         }
     }
@@ -243,7 +260,7 @@ mod tests {
             Expr::new_binop(
                 BinaryOp::Plus,
                 Expr::new_var("x"),
-                Expr::Value(Val::One),
+                Expr::Value(Val::Int(1)),
             ),
             Expr::new_unop(
                 UnaryOp::Sin,
@@ -256,6 +273,20 @@ mod tests {
         assert_eq!(eval(&e, &env), 2.0);
         let d = diff(e.clone(), &Var("x".to_string()));
         let expected = Expr::new_unop(UnaryOp::Sin, Expr::new_var("y"));
+        assert_eq!(d, expected);
+        let d = diff(e.clone(), &Var("y".to_string()));
+        let expected = Expr::new_binop(
+            BinaryOp::Multiply,
+            Expr::new_binop(
+                BinaryOp::Plus,
+                Expr::new_var("x"),
+                Expr::Value(Val::Int(1)),
+            ),
+            Expr::new_unop(
+                UnaryOp::Cos,
+                Expr::new_var("y"),
+            ),
+        );
         assert_eq!(d, expected);
     }
 }
