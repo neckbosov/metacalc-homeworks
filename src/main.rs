@@ -2,7 +2,8 @@ use std::collections::HashMap;
 use std::f64;
 use crate::BinaryOp::{Minus, Multiply, Plus, Divide};
 use crate::Val::{Float, Int};
-use crate::Expr::BinOp;
+use crate::Expr::{BinOp};
+use crate::UnaryOp::Sqrt;
 
 #[derive(Clone, Debug, PartialEq, Hash, Eq)]
 struct Var(String);
@@ -30,6 +31,7 @@ impl BinaryOp {
 enum UnaryOp {
     Sin,
     Cos,
+    Sqrt,
 }
 
 impl UnaryOp {
@@ -37,6 +39,7 @@ impl UnaryOp {
         match self {
             UnaryOp::Sin => { |x: f64| x.sin() }
             UnaryOp::Cos => { |x: f64| x.cos() }
+            UnaryOp::Sqrt => { |x: f64| x.sqrt() }
         }
     }
 }
@@ -140,12 +143,27 @@ fn diff_no_opt(e: Expr, var: &Var) -> Expr {
                             Box::new(Expr::UnOp(UnaryOp::Sin, x)),
                         )
                     }
+                    UnaryOp::Sqrt => {
+                        Expr::new_binop(
+                            Divide,
+                            Expr::Value(Val::Int(1)),
+                            Expr::new_unop(UnaryOp::Sqrt, *x),
+                        )
+                    }
                 }),
                 Box::new(dx),
             )
         }
         Expr::Pow(x, n) => {
-            Expr::new_binop(Multiply, Expr::Value(Int(n)), diff_no_opt(*x, var))
+            Expr::new_binop(
+                Multiply,
+                Expr::new_binop(
+                    Multiply,
+                    Expr::Value(Val::Int(n)),
+                    Expr::new_pow(*x.clone(), n - 1),
+                ),
+                diff_no_opt(*x, var),
+            )
         }
     }
 }
@@ -205,6 +223,7 @@ fn optimize(e: Expr) -> Expr {
                 match op {
                     UnaryOp::Sin => { Expr::Value(Val::Int(0)) }
                     UnaryOp::Cos => { Expr::Value(Val::Int(1)) }
+                    UnaryOp::Sqrt => { Expr::Value(Val::Int(0)) }
                 }
             } else {
                 Expr::UnOp(op, Box::new(x))
@@ -219,6 +238,19 @@ fn optimize(e: Expr) -> Expr {
                 match optimize(*x) {
                     x @ Expr::Value(Val::Int(0)) | x @ Expr::Value(Val::Int(1)) => { x }
                     Expr::Pow(x, m) => { Expr::Pow(x, n * m) }
+                    Expr::UnOp(UnaryOp::Sqrt, x) => {
+                        if n == 2 {
+                            *x
+                        } else if n % 2 == 0 {
+                            Expr::Pow(x, n / 2)
+                        } else {
+                            Expr::BinOp(
+                                Multiply,
+                                Box::new(Expr::Pow(x.clone(), n / 2)),
+                                Box::new(Expr::UnOp(Sqrt, x)),
+                            )
+                        }
+                    }
                     x => { Expr::Pow(Box::new(x), n) }
                 }
             }
@@ -235,6 +267,9 @@ mod tests {
     use crate::{Expr, BinaryOp, Val, Var, eval, UnaryOp, diff};
     use std::collections::HashMap;
     use std::iter::FromIterator;
+    use crate::UnaryOp::Sqrt;
+    use crate::BinaryOp::{Plus, Multiply, Divide};
+    use crate::Expr::Value;
 
     #[test]
     fn simple_test() {
@@ -289,9 +324,36 @@ mod tests {
         );
         assert_eq!(d, expected);
     }
+
+    #[test]
+    fn test_powers() {
+        let e = Expr::new_pow(
+            Expr::new_unop(Sqrt, Expr::new_binop(Plus, Expr::new_var("x"), Expr::Value(Val::Int(1)))),
+            3,
+        );
+        let env = HashMap::from_iter(vec![(Var("x".to_string()), 3.0)]);
+        assert_eq!(eval(&e, &env), 8.0);
+        let d = diff(e, &Var("x".to_string()));
+        let dexp = Expr::new_binop(
+            Multiply,
+            Expr::new_binop(
+                Multiply,
+                Expr::Value(Val::Int(3)),
+                Expr::new_binop(Plus, Expr::new_var("x"), Expr::Value(Val::Int(1))),
+            ),
+            Expr::new_binop(
+                Divide,
+                Expr::Value(Val::Int(1)),
+                Expr::new_unop(
+                    Sqrt,
+                    Expr::new_binop(Plus, Expr::new_var("x"), Expr::Value(Val::Int(1))),
+                ),
+            ),
+        );
+        assert_eq!(d, dexp);
+        assert_eq!(eval(&d, &env), 6.0);
+    }
 }
 
 
-fn main() {
-
-}
+fn main() {}
