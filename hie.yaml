@@ -1,0 +1,8 @@
+cradle:
+  stack:
+    - path: "./src"
+      component: "metacalc:lib"
+    - path: "./app"
+      component: "metacalc:exe:metacalc-exe"
+    - path: "./test"
+      component: "metacalc:test:metacalc-test"
