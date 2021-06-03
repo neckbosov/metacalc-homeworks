@@ -25,8 +25,18 @@ source-repository head
 
 library
   exposed-modules:
-      Int
+      Arith
+      AST
+      Canon
+      Classes
+      Env
+      Interpretator
       Lib
+      ProcessTree
+      Restrictions
+      Substitutions
+      Unify
+      Ura
   other-modules:
       Paths_metacalc
   hs-source-dirs:
@@ -44,8 +54,6 @@ library
 
 executable metacalc-exe
   main-is: Main.hs
-  other-modules:
-      Paths_metacalc
   hs-source-dirs:
       app
   ghc-options: -threaded -rtsopts -with-rtsopts=-N
@@ -63,8 +71,9 @@ executable metacalc-exe
 
 test-suite metacalc-test
   type: exitcode-stdio-1.0
-  main-is: Spec.hs
+  main-is: Test.hs
   other-modules:
+      Test.Sum
       Paths_metacalc
   hs-source-dirs:
       test
