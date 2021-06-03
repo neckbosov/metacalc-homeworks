@@ -1,6 +1,6 @@
 cabal-version: 1.12
 
--- This file has been generated from package.yaml by hpack version 0.34.3.
+-- This file has been generated from package.yaml by hpack version 0.34.4.
 --
 -- see: https://github.com/sol/hpack
 
@@ -25,13 +25,21 @@ source-repository head
 
 library
   exposed-modules:
+      Int
       Lib
   other-modules:
       Paths_metacalc
   hs-source-dirs:
       src
   build-depends:
-      base >=4.7 && <5
+      HUnit
+    , base >=4.7 && <5
+    , containers
+    , hedgehog
+    , tasty
+    , tasty-discover
+    , tasty-hedgehog
+    , tasty-hunit
   default-language: Haskell2010
 
 executable metacalc-exe
@@ -42,8 +50,15 @@ executable metacalc-exe
       app
   ghc-options: -threaded -rtsopts -with-rtsopts=-N
   build-depends:
-      base >=4.7 && <5
+      HUnit
+    , base >=4.7 && <5
+    , containers
+    , hedgehog
     , metacalc
+    , tasty
+    , tasty-discover
+    , tasty-hedgehog
+    , tasty-hunit
   default-language: Haskell2010
 
 test-suite metacalc-test
@@ -55,6 +70,13 @@ test-suite metacalc-test
       test
   ghc-options: -threaded -rtsopts -with-rtsopts=-N
   build-depends:
-      base >=4.7 && <5
+      HUnit
+    , base >=4.7 && <5
+    , containers
+    , hedgehog
     , metacalc
+    , tasty
+    , tasty-discover
+    , tasty-hedgehog
+    , tasty-hunit
   default-language: Haskell2010
