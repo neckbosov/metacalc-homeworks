@@ -22,6 +22,8 @@ reverseRec =
     e_subs_head = PVE "subs_head"
     e_subs_tail = PVE "subs_tail"
 
+reverseProg = [reverseDef, reverseRec]
+
 digitsSum :: FDef
 digitsSum =
   DEFINE
