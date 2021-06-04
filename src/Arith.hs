@@ -252,3 +252,13 @@ tsgSumWithDigits =
 
 tsgSumProg :: Prog
 tsgSumProg = [tsgSum, tsgReverseAndSum, tsgSumImp, tsgSumWithDigits, tsgSumWithMove]
+
+numToExp :: Int -> Exp -> Exp
+numToExp 0 rest = CONS (ATOM "0") rest
+numToExp 1 rest = CONS (ATOM "1") rest
+numToExp n rest = let r = n `mod` 2 in numToExp (n `div` 2) (CONS (ATOM $ show r) rest)
+
+expToNum :: Exp -> Int -> Int
+expToNum (ATOM _) acc = acc
+expToNum (CONS (ATOM s) rest) acc = let x = read s :: Int in expToNum rest (acc * 2 + x)
+expToNum _ _ = undefined
